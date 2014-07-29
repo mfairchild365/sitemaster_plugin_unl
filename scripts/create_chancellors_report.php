@@ -19,6 +19,31 @@ function calcPercent($pages_with_errors, $total_pages)
     return round(($passing_pages / $total_pages) * 100);
 }
 
+function hasOtherMarks($scan)
+{
+    $sql = 'SELECT count(*) as total
+            FROM page_marks
+            JOIN scanned_page ON (page_marks.scanned_page_id = scanned_page.id)
+            JOIN scans ON (scanned_page.scans_id = scans.id)
+            JOIN marks ON (page_marks.marks_id = marks.id)
+            JOIN metrics ON (marks.metrics_id = metrics.id)
+            WHERE metrics.machine_name = "unl_wdn"
+                AND scans.id = ' . (int)$scan->id . '
+                AND marks.machine_name IN ("UNL_FRAMEWORK_YOUTUBUE", "UNL_FRAMEWORK_PDF", "UNL_FRAMEWORK_FLASH")';
+    
+    $mysqli = \SiteMaster\Core\Util::getDB();
+
+    if (!$result = $mysqli->query($sql)) {
+        return false;
+    }
+    
+    if (!$row = $result->fetch_assoc()) {
+        return false;
+    }
+
+    return (bool)$row['total'];
+}
+
 //Headers
 $csv[] = array(
     'Site URL',
@@ -34,6 +59,7 @@ $csv[] = array(
     'Metric - links',
     'Metric - pa11y',
     'Metric - html',
+    'Other Notices',
     'Scan Date',
     'Replaced By',
     'Root Site URL',
@@ -67,6 +93,7 @@ foreach ($sites as $site) {
     $metric_links     = NULL;
     $metric_a11y      = NULL;
     $metric_html      = NULL;
+    $other            = NULL;
     
 
     if ($progress = \SiteMaster\Plugins\Unl\Progress::getBySitesID($site->id)) {
@@ -94,6 +121,7 @@ foreach ($sites as $site) {
             $metric_links,
             $metric_a11y,
             $metric_html,
+            $other,
             $scan_date,
             $replaced_by,
             $root_site_url,
@@ -130,6 +158,7 @@ foreach ($sites as $site) {
             $metric_links,
             $metric_a11y,
             $metric_html,
+            $other,
             $scan_date,
             $replaced_by,
             $root_site_url,
@@ -139,6 +168,10 @@ foreach ($sites as $site) {
         continue;
     }
     
+    //Determine if there were 'other' marks (youtube, pdf and flash notices).
+    $other = hasOtherMarks($scan);
+    
+    //Gather percentages for metric errors.
     $metric_framework = calcPercent($scan->getHotSpots(\SiteMaster\Core\Auditor\Metric::getByMachineName('unl_wdn')->id, -1, false)->count(), $total_pages);
     $metric_links     = calcPercent($scan->getHotSpots(\SiteMaster\Core\Auditor\Metric::getByMachineName('link_checker')->id, -1, false)->count(), $total_pages);
     $metric_html      = calcPercent($scan->getHotSpots(\SiteMaster\Core\Auditor\Metric::getByMachineName('w3c_html')->id, -1, false)->count(), $total_pages);
@@ -160,6 +193,7 @@ foreach ($sites as $site) {
             $metric_links,
             $metric_a11y,
             $metric_html,
+            $other,
             $scan_date,
             $replaced_by,
             $root_site_url,
@@ -198,6 +232,7 @@ foreach ($sites as $site) {
         $metric_links,
         $metric_a11y,
         $metric_html,
+        $other,
         $scan_date,
         $replaced_by,
         $root_site_url,
